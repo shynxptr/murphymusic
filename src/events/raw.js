@@ -1,16 +1,10 @@
-import { Events } from "discord.js";
-
-// Handle raw voice state updates for Lavalink
-// Lavalink needs raw voice payloads to connect to voice channels
+// Forward raw Discord gateway payloads to Lavalink
+// lavalink-client's sendRawData() internally filters for VOICE_STATE_UPDATE
+// and VOICE_SERVER_UPDATE, so we just pass everything through
 export default {
   name: "raw",
   async execute(payload, client) {
-    // Pass voice-related payloads to Lavalink
-    if (
-      payload.t === "VOICE_SERVER_UPDATE" ||
-      payload.t === "VOICE_STATE_UPDATE"
-    ) {
-      client.lavalink.sendRawPayload(payload.d.guild_id, payload);
-    }
+    if (!client.lavalink) return;
+    client.lavalink.sendRawData(payload);
   },
 };
