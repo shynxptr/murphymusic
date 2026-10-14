@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { Client, GatewayIntentBits, Partials, ActivityType } from "discord.js";
+import { Client, GatewayIntentBits, Partials } from "discord.js";
 import { manager, setClient } from "./lavalink.js";
 import { loadCommands, handleInteraction } from "./handlers/commandHandler.js";
 import { loadEvents } from "./handlers/eventHandler.js";
@@ -25,7 +25,10 @@ client.lavalink = manager;
 await loadCommands(client);
 await loadEvents(client);
 
-// Login
+// Login first, then init lavalink
 await client.login(process.env.DISCORD_TOKEN);
+
+// Init lavalink manager with bot user id after login
+client.lavalink.init(client.user.id);
 
 export { client };

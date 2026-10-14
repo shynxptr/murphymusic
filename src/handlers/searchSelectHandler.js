@@ -1,4 +1,5 @@
 import { SlashCommandBuilder, StringSelectMenuInteraction } from "discord.js";
+import { getTrackInfo } from "../utils/musicUtils.js";
 
 // Handle the search select menu interaction
 export async function handleSearchSelect(interaction, client) {
@@ -22,14 +23,15 @@ export async function handleSearchSelect(interaction, client) {
   player.queue.add(selectedTrack);
 
   if (!player.playing && !player.paused) {
-    await player.play({ track: selectedTrack });
+    await player.play({ track: { encoded: selectedTrack.encoded } });
   }
 
+  const info = getTrackInfo(selectedTrack);
   const position = player.queue.size;
   const positionText = position > 0 ? `\n📊 Position: #${position}` : "";
 
   await interaction.update({
-    content: `🎵 **${selectedTrack.title}** by **${selectedTrack.author}**${positionText}`,
+    content: `🎵 **${info.title}** by **${info.author}**${positionText}`,
     components: [],
   });
 

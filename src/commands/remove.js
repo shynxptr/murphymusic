@@ -1,4 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
+import { getTrackInfo } from "../utils/musicUtils.js";
 
 export default {
   data: new SlashCommandBuilder()
@@ -28,8 +29,9 @@ export default {
     }
 
     const removed = player.queue.tracks[position - 1];
+    const removedInfo = getTrackInfo(removed);
     player.queue.removeTracks(position - 1);
 
-    await interaction.reply(`🗑️ Removed **${removed.title}** dari posisi #${position}`);
+    await interaction.reply(`🗑️ Removed **${removedInfo.title}** dari posisi #${position}`);
   },
 };

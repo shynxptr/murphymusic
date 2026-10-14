@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
-import { createPlayer, getSourceEmoji, formatDuration } from "../utils/musicUtils.js";
+import { createPlayer, getSourceEmoji, formatDuration, getTrackInfo } from "../utils/musicUtils.js";
 
 export default {
   data: new SlashCommandBuilder()
@@ -25,12 +25,12 @@ export default {
         source: "ytsearch",
       }, interaction.user);
 
-      if (!result || result.tracks.length === 0) {
+      if (!result || !result.tracks || result.tracks.length === 0) {
         return interaction.editReply("❌ Tidak ada lagu yang ditemukan!");
       }
 
       const addedTracks = [];
-      let isPlaylist = result.loadType === "playlist";
+      const isPlaylist = result.loadType === "playlist";
 
       if (isPlaylist) {
         for (const track of result.tracks) {
@@ -44,17 +44,18 @@ export default {
       }
 
       const track = addedTracks[0];
-      const emoji = getSourceEmoji(track.sourceName);
+      const info = getTrackInfo(track);
+      const emoji = getSourceEmoji(info.sourceName);
 
       if (!player.playing && !player.paused) {
-        await player.play({ track: addedTracks[0] });
+        await player.play({ track: { encoded: track.encoded } });
       }
 
       if (isPlaylist) {
         await interaction.editReply(
           `🎶 **Playlist added!** ${addedTracks.length} tracks in queue\n` +
-          `Now playing: ${emoji} **${track.title}** by **${track.author}**\n` +
-          `Duration: ${formatDuration(track.duration)}`
+          `Now playing: ${emoji} **${info.title}** by **${info.author}**\n` +
+          `Duration: ${formatDuration(info.duration)}`
         );
       } else {
         const position = player.queue.size;
@@ -63,8 +64,8 @@ export default {
           : "";
 
         await interaction.editReply(
-          `${emoji} **${track.title}** by **${track.author}**\n` +
-          `Duration: ${formatDuration(track.duration)}${positionText}`
+          `${emoji} **${info.title}** by **${info.author}**\n` +
+          `Duration: ${formatDuration(info.duration)}${positionText}`
         );
       }
     } catch (error) {

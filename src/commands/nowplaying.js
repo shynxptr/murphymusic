@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
-import { getSourceEmoji, formatDuration, createProgressBar } from "../utils/musicUtils.js";
+import { getSourceEmoji, formatDuration, createProgressBar, getTrackInfo } from "../utils/musicUtils.js";
 
 export default {
   data: new SlashCommandBuilder()
@@ -13,8 +13,9 @@ export default {
     }
 
     const track = player.queue.current;
-    const emoji = getSourceEmoji(track.sourceName);
-    const progress = createProgressBar(player.position, track.duration);
+    const info = getTrackInfo(track);
+    const emoji = getSourceEmoji(info.sourceName);
+    const progress = createProgressBar(player.position, info.duration);
 
     const loopText = player.repeatMode === "track" ? " 🔂" : player.repeatMode === "queue" ? " 🔁" : "";
 
@@ -22,12 +23,12 @@ export default {
       color: 0x2b2d31,
       title: "🎵 Now Playing",
       description:
-        `${emoji} **${track.title}**\n` +
-        `👤 ${track.author}\n` +
+        `${emoji} **${info.title}**\n` +
+        `👤 ${info.author}\n` +
         `${loopText}\n` +
         `\n${progress}\n` +
-        `\`${formatDuration(player.position)}\` / \`${formatDuration(track.duration)}\``,
-      thumbnail: { url: track.artworkUrl || null },
+        `\`${formatDuration(player.position)}\` / \`${formatDuration(info.duration)}\``,
+      thumbnail: { url: info.artworkUrl || null },
       footer: {
         text: `Requested by ${track.requester?.tag || "Unknown"}` +
           ` • Volume: ${player.volume}%` +

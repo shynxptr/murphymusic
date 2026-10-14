@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, StringSelectMenuBuilder, ActionRowBuilder } from "discord.js";
-import { createPlayer, getSourceEmoji, formatDuration } from "../utils/musicUtils.js";
+import { createPlayer, getSourceEmoji, formatDuration, getTrackInfo } from "../utils/musicUtils.js";
 
 export default {
   data: new SlashCommandBuilder()
@@ -28,17 +28,20 @@ export default {
         source: "ytsearch",
       }, interaction.user);
 
-      if (!result || result.tracks.length === 0) {
+      if (!result || !result.tracks || result.tracks.length === 0) {
         return interaction.editReply("❌ Tidak ada hasil ditemukan!");
       }
 
       const tracks = result.tracks.slice(0, 10);
-      const options = tracks.map((track, i) => ({
-        label: `${i + 1}. ${track.title}`.slice(0, 100),
-        description: `${track.author} • ${formatDuration(track.duration)}`.slice(0, 100),
-        value: track.encoded,
-        emoji: getSourceEmoji(track.sourceName),
-      }));
+      const options = tracks.map((track, i) => {
+        const info = getTrackInfo(track);
+        return {
+          label: `${i + 1}. ${info.title}`.slice(0, 100),
+          description: `${info.author} • ${formatDuration(info.duration)}`.slice(0, 100),
+          value: track.encoded,
+          emoji: getSourceEmoji(info.sourceName),
+        };
+      });
 
       const selectMenu = new StringSelectMenuBuilder()
         .setCustomId("search-select")

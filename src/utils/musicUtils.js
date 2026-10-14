@@ -1,6 +1,21 @@
 import prettyMs from "pretty-ms";
 
 /**
+ * Safely get track info fields (lavalink-client stores them in track.info)
+ */
+export function getTrackInfo(track) {
+  const info = track?.info || track || {};
+  return {
+    title: info.title || "Unknown",
+    author: info.author || "Unknown",
+    duration: info.duration || track?.duration || 0,
+    sourceName: info.sourceName || track?.sourceName || "",
+    artworkUrl: info.artworkUrl || track?.artworkUrl || null,
+    uri: info.uri || track?.uri || null,
+  };
+}
+
+/**
  * Format duration from milliseconds to readable string
  */
 export function formatDuration(ms) {

@@ -1,4 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
+import { getTrackInfo } from "../utils/musicUtils.js";
 
 export default {
   data: new SlashCommandBuilder()
@@ -11,14 +12,15 @@ export default {
       return interaction.reply({ content: "❌ Tidak ada lagu yang sedang diputar!", ephemeral: true });
     }
 
-    const skipped = player.queue.current.title;
+    const skippedInfo = getTrackInfo(player.queue.current);
     await player.skip();
 
     const next = player.queue.current;
     if (next) {
-      await interaction.reply(`⏭️ Skipped **${skipped}**\n🎵 Now playing: **${next.title}**`);
+      const nextInfo = getTrackInfo(next);
+      await interaction.reply(`⏭️ Skipped **${skippedInfo.title}**\n🎵 Now playing: **${nextInfo.title}**`);
     } else {
-      await interaction.reply(`⏭️ Skipped **${skipped}**\n📭 Queue sudah habis`);
+      await interaction.reply(`⏭️ Skipped **${skippedInfo.title}**\n📭 Queue sudah habis`);
     }
   },
 };
