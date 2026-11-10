@@ -1,4 +1,20 @@
 /**
+ * Safely check if a Lavalink /loadtracks response contains at least one playable track
+ */
+export function hasPlayableTracks(res) {
+  if (!res || res.loadType === "empty" || res.loadType === "error" || !res.data) {
+    return false;
+  }
+  if (res.loadType === "playlist") {
+    return Array.isArray(res.data.tracks) && res.data.tracks.length > 0;
+  }
+  if (Array.isArray(res.data)) {
+    return res.data.length > 0 && Boolean(res.data[0]?.encoded);
+  }
+  return Boolean(res.data?.encoded);
+}
+
+/**
  * Safely get track info fields (lavalink-client stores them in track.info)
  */
 export function getTrackInfo(track) {

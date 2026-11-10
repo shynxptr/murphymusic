@@ -1,4 +1,11 @@
-import { createPlayer, getSourceEmoji, formatDuration, getTrackInfo, validateVoiceControl } from "../utils/musicUtils.js";
+import {
+  createPlayer,
+  getSourceEmoji,
+  formatDuration,
+  getTrackInfo,
+  validateVoiceControl,
+  hasPlayableTracks,
+} from "../utils/musicUtils.js";
 
 export default {
   name: "search",
@@ -26,14 +33,14 @@ export default {
       };
 
       let res = await resolveIdentifier(`ytmsearch:${query}`);
-      if (!res || res.loadType === "empty" || res.loadType === "error") {
+      if (!hasPlayableTracks(res)) {
         res = await resolveIdentifier(`ytsearch:${query}`);
       }
-      if (!res || res.loadType === "empty" || res.loadType === "error") {
+      if (!hasPlayableTracks(res)) {
         res = await resolveIdentifier(`scsearch:${query}`);
       }
 
-      if (!res || res.loadType === "empty" || res.loadType === "error") {
+      if (!hasPlayableTracks(res)) {
         return searchMsg.edit("❌ Lagu tidak ditemukan!");
       }
 

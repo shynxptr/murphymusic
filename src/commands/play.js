@@ -4,6 +4,7 @@ import {
   formatDuration,
   getTrackInfo,
   resolveUrlFallbackQuery,
+  hasPlayableTracks,
 } from "../utils/musicUtils.js";
 
 export default {
@@ -32,45 +33,52 @@ export default {
 
     try {
       const resolveIdentifier = async (identifier) => {
-        if (player.node?.rest?.resolve) {
-          return await player.node.rest.resolve(identifier);
+        const res = player.node?.rest?.resolve
+          ? await player.node.rest.resolve(identifier)
+          : await player.node.request(`/loadtracks?identifier=${encodeURIComponent(identifier)}`);
+
+        if (res?.loadType === "error") {
+          console.warn(`[Lavalink] loadType=error for "${identifier}":`, res.data);
         }
-        return await player.node.request(`/loadtracks?identifier=${encodeURIComponent(identifier)}`);
+        return res;
       };
 
       let res = await resolveIdentifier(searchString);
 
       // Jika bukan URL dan ytmsearch kosong/error, coba ytsearch lalu scsearch
-      if ((!res || res.loadType === "empty" || res.loadType === "error") && !isUrl) {
+      if (!hasPlayableTracks(res) && !isUrl) {
         res = await resolveIdentifier(`ytsearch:${query}`);
-        if (!res || res.loadType === "empty" || res.loadType === "error") {
+        if (!hasPlayableTracks(res)) {
           res = await resolveIdentifier(`scsearch:${query}`);
         }
       }
 
       // Jika input adalah URL namun gagal dimuat langsung oleh Lavalink, coba cari via judul oEmbed
-      if ((!res || res.loadType === "empty" || res.loadType === "error") && isUrl) {
+      if (!hasPlayableTracks(res) && isUrl) {
         const fallbackTitle = await resolveUrlFallbackQuery(query);
         if (fallbackTitle) {
+          console.log(`[Play] Direct URL failed, falling back to title search: "${fallbackTitle}"`);
           res = await resolveIdentifier(`ytmsearch:${fallbackTitle}`);
-          if (!res || res.loadType === "empty" || res.loadType === "error") {
+          if (!hasPlayableTracks(res)) {
             res = await resolveIdentifier(`ytsearch:${fallbackTitle}`);
           }
-          if (!res || res.loadType === "empty" || res.loadType === "error") {
+          if (!hasPlayableTracks(res)) {
             res = await resolveIdentifier(`scsearch:${fallbackTitle}`);
           }
         }
       }
 
-      if (!res || res.loadType === "empty" || res.loadType === "error") {
+      if (!hasPlayableTracks(res)) {
         return loadingMsg.edit("❌ Lagu atau link tidak ditemukan!");
       }
 
       // Lanjutkan proses pemutaran trek
-      const rawTrack = res.loadType === "playlist" ? res.data.tracks[0] : res.data[0] || res.data;
-      if (!rawTrack) {
-        return loadingMsg.edit("❌ Lagu atau link tidak ditemukan!");
-      }
+      const rawTrack =
+        res.loadType === "playlist"
+          ? res.data.tracks[0]
+          : Array.isArray(res.data)
+            ? res.data[0]
+            : res.data;
 
       const buildTrack = (t) =>
         player.LavalinkManager?.utils?.buildTrack
