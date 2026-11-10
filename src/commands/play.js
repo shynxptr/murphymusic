@@ -13,78 +13,93 @@ export default {
   usage: "<judul lagu / URL>",
 
   async execute(message, args, client, prefix) {
-    if (!args.length) {
-      return message.reply(`❌ Masukkan judul lagu atau link! Contoh: \`${prefix}p <judul lagu>\``);
+    const query = args.join(" ").trim();
+    if (!query) {
+      return message.reply(`❌ Masukkan judul lagu atau link YouTube! Contoh: \`${prefix}p <judul lagu>\``);
     }
 
     const { player, error } = await createPlayer(message, client);
     if (error) return message.reply(error);
 
-    const query = args.join(" ").trim();
-    const isUrl = /^https?:\/\//i.test(query);
+    // Cek apakah input adalah URL yang valid
+    const isUrl = query.match(
+      /^https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/
+    );
+
+    // Jika URL, gunakan langsung. Jika bukan, gunakan ytmsearch/ytsearch.
+    const searchString = isUrl ? query : `ytmsearch:${query}`;
     const loadingMsg = await message.reply(`🔎 Mencari **${query}**...`);
 
     try {
-      // 1. Try direct URL or YouTube search first
-      let result = await player.search(
-        isUrl ? { query } : { query, source: "ytsearch" },
-        message.author
-      );
+      const resolveIdentifier = async (identifier) => {
+        if (player.node?.rest?.resolve) {
+          return await player.node.rest.resolve(identifier);
+        }
+        return await player.node.request(`/loadtracks?identifier=${encodeURIComponent(identifier)}`);
+      };
 
-      // 2. If a direct YouTube/Spotify URL failed to load on Lavalink, resolve its title via oEmbed and search
-      if ((!result || !result.tracks || result.tracks.length === 0) && isUrl) {
-        const fallbackQuery = await resolveUrlFallbackQuery(query);
-        if (fallbackQuery) {
-          result = await player.search(
-            { query: fallbackQuery, source: "ytsearch" },
-            message.author
-          );
-          if (!result || !result.tracks || result.tracks.length === 0) {
-            result = await player.search(
-              { query: fallbackQuery, source: "scsearch" },
-              message.author
-            );
+      let res = await resolveIdentifier(searchString);
+
+      // Jika bukan URL dan ytmsearch kosong/error, coba ytsearch lalu scsearch
+      if ((!res || res.loadType === "empty" || res.loadType === "error") && !isUrl) {
+        res = await resolveIdentifier(`ytsearch:${query}`);
+        if (!res || res.loadType === "empty" || res.loadType === "error") {
+          res = await resolveIdentifier(`scsearch:${query}`);
+        }
+      }
+
+      // Jika input adalah URL namun gagal dimuat langsung oleh Lavalink, coba cari via judul oEmbed
+      if ((!res || res.loadType === "empty" || res.loadType === "error") && isUrl) {
+        const fallbackTitle = await resolveUrlFallbackQuery(query);
+        if (fallbackTitle) {
+          res = await resolveIdentifier(`ytmsearch:${fallbackTitle}`);
+          if (!res || res.loadType === "empty" || res.loadType === "error") {
+            res = await resolveIdentifier(`ytsearch:${fallbackTitle}`);
+          }
+          if (!res || res.loadType === "empty" || res.loadType === "error") {
+            res = await resolveIdentifier(`scsearch:${fallbackTitle}`);
           }
         }
       }
 
-      // 3. Fallback to SoundCloud search for text queries if YouTube search returned empty
-      if ((!result || !result.tracks || result.tracks.length === 0) && !isUrl) {
-        result = await player.search(
-          { query, source: "scsearch" },
-          message.author
-        );
+      if (!res || res.loadType === "empty" || res.loadType === "error") {
+        return loadingMsg.edit("❌ Lagu atau link tidak ditemukan!");
       }
 
-      if (!result || !result.tracks || result.tracks.length === 0) {
-        if (result?.loadType === "error" && result?.exception?.message) {
-          return loadingMsg.edit(`❌ Gagal memuat lagu dari Lavalink: \`${result.exception.message}\``);
-        }
-        return loadingMsg.edit("❌ Tidak ada lagu yang ditemukan!");
+      // Lanjutkan proses pemutaran trek
+      const rawTrack = res.loadType === "playlist" ? res.data.tracks[0] : res.data[0] || res.data;
+      if (!rawTrack) {
+        return loadingMsg.edit("❌ Lagu atau link tidak ditemukan!");
       }
 
-      const isPlaylist = result.loadType === "playlist";
+      const buildTrack = (t) =>
+        player.LavalinkManager?.utils?.buildTrack
+          ? player.LavalinkManager.utils.buildTrack(t, message.author)
+          : { ...t, requester: message.author };
+
+      const track = buildTrack(rawTrack);
+      const isPlaylist = res.loadType === "playlist";
       const wasPlaying = player.playing || player.paused;
 
-      if (isPlaylist) {
-        player.queue.add(result.tracks);
+      if (isPlaylist && Array.isArray(res.data.tracks)) {
+        const playlistTracks = res.data.tracks.map(buildTrack);
+        player.queue.add(playlistTracks);
       } else {
-        player.queue.add(result.tracks[0]);
+        player.queue.add(track);
       }
 
-      const firstTrack = result.tracks[0];
-      const info = getTrackInfo(firstTrack);
+      const info = getTrackInfo(track);
       const emoji = getSourceEmoji(info.sourceName);
 
-      // Start playback from queue without passing duplicate track object
       if (!player.playing && !player.paused) {
         await player.play();
       }
 
       if (isPlaylist) {
-        const playlistTitle = result.playlist?.title || result.playlist?.name || "Playlist";
+        const playlistTitle = res.data?.info?.name || "Playlist";
+        const count = res.data?.tracks?.length || 1;
         await loadingMsg.edit(
-          `🎶 **Playlist ditambahkan:** **${playlistTitle}** (${result.tracks.length} lagu)\n` +
+          `🎶 **Playlist ditambahkan:** **${playlistTitle}** (${count} lagu)\n` +
           `${wasPlaying ? "Ditambahkan ke antrean" : "Mulai memutar"}: ${emoji} **${info.title}** — **${info.author}** (\`${formatDuration(info.duration)}\`)`
         );
       } else if (wasPlaying) {

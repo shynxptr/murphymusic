@@ -7,41 +7,49 @@ export default {
   usage: "<judul lagu>",
 
   async execute(message, args, client, prefix) {
-    if (!args.length) {
+    const query = args.join(" ").trim();
+    if (!query) {
       return message.reply(`❌ Masukkan judul lagu yang ingin dicari! Contoh: \`${prefix}search <judul lagu>\``);
     }
 
     const { player, error } = await createPlayer(message, client);
     if (error) return message.reply(error);
 
-    const query = args.join(" ").trim();
     const searchMsg = await message.reply(`🔎 Mencari **${query}**...`);
 
     try {
-      let result = await player.search(
-        {
-          query,
-          source: "ytsearch",
-        },
-        message.author
-      );
+      const resolveIdentifier = async (identifier) => {
+        if (player.node?.rest?.resolve) {
+          return await player.node.rest.resolve(identifier);
+        }
+        return await player.node.request(`/loadtracks?identifier=${encodeURIComponent(identifier)}`);
+      };
 
-      // Fallback to SoundCloud if YouTube search returns empty
-      if (!result || !result.tracks || result.tracks.length === 0) {
-        result = await player.search(
-          {
-            query,
-            source: "scsearch",
-          },
-          message.author
-        );
+      let res = await resolveIdentifier(`ytmsearch:${query}`);
+      if (!res || res.loadType === "empty" || res.loadType === "error") {
+        res = await resolveIdentifier(`ytsearch:${query}`);
+      }
+      if (!res || res.loadType === "empty" || res.loadType === "error") {
+        res = await resolveIdentifier(`scsearch:${query}`);
       }
 
-      if (!result || !result.tracks || result.tracks.length === 0) {
-        return searchMsg.edit("❌ Tidak ada hasil ditemukan!");
+      if (!res || res.loadType === "empty" || res.loadType === "error") {
+        return searchMsg.edit("❌ Lagu tidak ditemukan!");
       }
 
-      const tracks = result.tracks.slice(0, 10);
+      const rawTracks =
+        res.loadType === "playlist"
+          ? res.data.tracks
+          : Array.isArray(res.data)
+            ? res.data
+            : [res.data];
+
+      const buildTrack = (t) =>
+        player.LavalinkManager?.utils?.buildTrack
+          ? player.LavalinkManager.utils.buildTrack(t, message.author)
+          : { ...t, requester: message.author };
+
+      const tracks = rawTracks.slice(0, 10).map(buildTrack);
       const listText = tracks
         .map((track, i) => {
           const info = getTrackInfo(track);

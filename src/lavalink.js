@@ -20,6 +20,10 @@ export const manager = new LavalinkManager({
       secure: process.env.LAVALINK_SECURE === "true",
       retryAmount: 5,
       retryDelay: 5000,
+      autoChecks: {
+        sourcesValidations: false,
+        pluginValidations: false,
+      },
     },
   ],
   // Send audio data to Discord voice gateway
@@ -43,8 +47,25 @@ export const manager = new LavalinkManager({
   },
 });
 
+// Attach node.rest.resolve(searchString) helper to all nodes for direct Lavalink v4 /loadtracks resolution
+function attachRestResolve(node) {
+  if (!node) return;
+  if (!node.rest) {
+    node.rest = {
+      resolve: async (identifier) => {
+        return await node.request(`/loadtracks?identifier=${encodeURIComponent(identifier)}`);
+      },
+    };
+  }
+}
+
+for (const node of manager.nodeManager.nodes.values()) {
+  attachRestResolve(node);
+}
+
 // Node Manager Event Listeners (prevent unhandled error crashes)
 manager.nodeManager.on("connect", (node) => {
+  attachRestResolve(node);
   console.log(`🟢 Lavalink node "${node.id}" connected (${node.options.host}:${node.options.port})!`);
 });
 
