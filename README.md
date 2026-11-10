@@ -1,184 +1,62 @@
-# 🎵 Discord Music Bot (Jockie Music Clone)
+# 🎵 Murphy Music Bot
 
-Bot music Discord dengan fitur lengkap, terinspirasi dari **Jockie Music** — salah satu bot music Discord terbesar. Mendukung multi-server, YouTube, Spotify, SoundCloud, playlist, dan lebih banyak lagi.
+Bot musik Discord berbasis **Lavalink v4** dan **discord.js v14** dengan sistem **Prefix Command** (default: `f!`) dan singkatan command cepat ala Jockie Music (`f!p`, `f!s`, `f!q`, dll).
 
-## ✨ Fitur
+## ✨ Daftar Command & Singkatan
 
-| Command | Deskripsi |
-|---------|-----------|
-| `/play <query/url>` | Play lagu dari YouTube/Spotify/SoundCloud/URL |
-| `/search <query>` | Cari lagu di YouTube, pilih dari dropdown |
-| `/queue` | Lihat queue lagu yang akan diputar |
-| `/nowplaying` | Lihat lagu yang sedang diputar dengan progress bar |
-| `/skip` | Skip lagu yang sedang diputar |
-| `/stop` | Stop bot & clear queue, disconnect dari voice |
-| `/pause` | Pause lagu |
-| `/resume` | Resume lagu yang di-pause |
-| `/volume <0-150>` | Set volume music |
-| `/loop <off/track/queue>` | Set loop mode |
-| `/shuffle` | Acak urutan queue |
-| `/remove <position>` | Hapus lagu dari queue berdasarkan posisi |
+Default prefix adalah **`f!`** (bisa diubah per server menggunakan `f!prefix <prefix_baru>`).
 
-### Fitur Tambahan (mirip Jockie Music)
-- ✅ **Auto-leave** ketika tidak ada orang di voice channel (5 menit)
-- ✅ **Auto-resume** setelah bot restart
-- ✅ **Playlist support** — play seluruh playlist sekaligus
-- ✅ **Multi-source** — YouTube, Spotify, SoundCloud, dan lainnya
-- ✅ **Progress bar** real-time
-- ✅ **Track history** — menyimpan 100 lagu sebelumnya
-- ✅ **Queue management** — shuffle, remove, loop
+| Command | Singkatan (Aliases) | Deskripsi |
+|---------|---------------------|-----------|
+| `f!play <judul/URL>` | `f!p` | Putar lagu atau playlist dari YouTube, Spotify, SoundCloud, atau URL |
+| `f!search <judul>` | `f!find`, `f!sc` | Cari lagu di YouTube dan pilih dengan ketik angka `1`–`10` di chat |
+| `f!queue [halaman]` | `f!q`, `f!list` | Tampilkan antrean lagu yang sedang berjalan |
+| `f!nowplaying` | `f!np`, `f!current` | Tampilkan detail lagu yang sedang diputar beserta progress bar |
+| `f!skip` | `f!s`, `f!next` | Lewati lagu yang sedang diputar |
+| `f!previous` | `f!prev`, `f!back`, `f!b` | Putar kembali lagu sebelumnya |
+| `f!pause` | `f!pa` | Jeda lagu yang sedang diputar |
+| `f!resume` | `f!r`, `f!unpause` | Lanjutkan lagu yang dijeda |
+| `f!seek <waktu>` | `f!sk`, `f!jump` | Lompat ke durasi tertentu (contoh: `f!seek 1:30` atau `f!seek 90`) |
+| `f!stop` | `f!dc`, `f!leave` | Hentikan musik, bersihkan antrean, dan keluar dari voice channel |
+| `f!volume [0-150]` | `f!v`, `f!vol` | Cek atau ubah volume musik (0–150%) |
+| `f!loop [off\|track\|queue]` | `f!l`, `f!repeat` | Atur mode pengulangan lagu atau antrean |
+| `f!shuffle` | `f!sh`, `f!mix` | Acak urutan lagu di antrean |
+| `f!remove <nomor>` | `f!rm`, `f!delete` | Hapus lagu dari antrean berdasarkan nomor urut |
+| `f!clear` | `f!cl`, `f!empty` | Bersihkan seluruh antrean tanpa menghentikan lagu yang sedang jalan |
+| `f!247` | `f!stay`, `f!24/7` | Aktifkan/matikan mode 24/7 di voice channel |
+| `f!prefix [prefix\|reset]` | `f!setprefix` | Lihat atau ubah prefix command khusus untuk server tersebut |
+| `f!help` | `f!h`, `f!commands` | Tampilkan daftar semua command dan singkatannya |
 
-## 📋 Prasyarat
+## 🚀 Cara Menjalankan di VPS
 
-1. **Node.js v18+** — [Download](https://nodejs.org/)
-2. **Java 17+** — Diperlukan untuk menjalankan Lavalink server
-3. **Lavalink v4** — Download dari [GitHub Releases](https://github.com/lavalink-devs/Lavalink/releases)
-
-## 🚀 Setup
-
-### 1. Buat Discord Bot
-1. Buka [Discord Developer Portal](https://discord.com/developers/applications)
-2. Klik **New Application** → kasih nama
-3. Buka tab **Bot** → copy token
-4. Enable **Message Content Intent**, **Server Members Intent**, dan **Voice State Intent** di tab Bot
-5. Copy **Application ID** (Client ID) dari tab **General Information**
-
-### 2. Setup Lavalink
-1. Download `Lavalink.jar` dari [releases page](https://github.com/lavalink-devs/Lavalink/releases)
-2. Buat file `application.yml` di folder yang sama dengan jar:
-
-```yaml
-server:
-  port: 2333
-
-lavalink:
-  server:
-    password: yournamelavalink
-    sources:
-      youtube: true
-      bandcamp: true
-      soundcloud: true
-      vimeo: true
-      http: true
-      twitch: true
-      local: false
-
-plugins:
-  - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.2.0"
-    repository: "https://jitpack.io"
-
-lavasrc:
-  providers:
-    - "ytsearch:\"%ISRC%\""
-    - "ytsearch:%QUERY%"
-  spotify:
-    clientId: ""
-    clientSecret: ""
-    countryCode: "US"
-```
-
-3. Jalankan Lavalink:
-```bash
-java -jar Lavalink.jar
-```
-
-### 3. Setup Bot
+Pastikan server **Lavalink** sudah berjalan di host yang sama (`127.0.0.1:2333`, password `youshallnotpass`).
 
 ```bash
-# Install dependencies
+# 1. Install dependencies
 npm install
 
-# Copy config
+# 2. Salin konfigurasi environment
 cp .env.example .env
 
-# Edit .env dengan token dan credential kamu
-# DISCORD_TOKEN=your_bot_token
-# CLIENT_ID=your_client_id
-# LAVALINK_PASSWORD=yournamelavalink
+# 3. Isi DISCORD_TOKEN di file .env
+nano .env
 
-# Deploy slash commands ke Discord
-npm run deploy
-
-# Jalankan bot!
+# 4. Jalankan bot
 npm start
 ```
 
-### 4. Invite Bot ke Server
-Buka URL ini di browser (ganti `CLIENT_ID`):
+### Konfigurasi `.env`
 
-```
-https://discord.com/api/oauth2/authorize?client_id=CLIENT_ID&permissions=36700160&scope=bot%20applications.commands
-```
+```env
+DISCORD_TOKEN=your_bot_token_here
+CLIENT_ID=your_client_id_here
 
-**Permissions: 36700160** = Connect, Speak, Send Messages, Read Message History, Use Voice Activity
+LAVALINK_HOST=127.0.0.1
+LAVALINK_PORT=2333
+LAVALINK_PASSWORD=youshallnotpass
+LAVALINK_SECURE=false
 
-## 🏗️ Struktur Project
-
-```
-discord-music-bot/
-├── src/
-│   ├── commands/           # Slash commands
-│   │   ├── play.js
-│   │   ├── search.js
-│   │   ├── queue.js
-│   │   ├── nowplaying.js
-│   │   ├── skip.js
-│   │   ├── stop.js
-│   │   ├── pause.js
-│   │   ├── resume.js
-│   │   ├── volume.js
-│   │   ├── loop.js
-│   │   ├── shuffle.js
-│   │   └── remove.js
-│   ├── events/
-│   │   ├── ready.js
-│   │   ├── interactionCreate.js
-│   │   ├── voiceStateUpdate.js
-│   │   └── raw.js
-│   ├── handlers/
-│   │   ├── commandHandler.js
-│   │   ├── eventHandler.js
-│   │   └── searchSelectHandler.js
-│   ├── utils/
-│   │   └── musicUtils.js
-│   ├── lavalink.js
-│   ├── index.js
-│   └── deploy-commands.js
-├── .env.example
-├── .gitignore
-└── package.json
+PREFIX=f!
 ```
 
-## 🔧 Konfigurasi Lanjutan
-
-### Spotify Support
-1. Buka [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
-2. Buat app → copy Client ID & Client Secret
-3. Isi di `.env`:
-```
-SPOTIFY_CLIENT_ID=your_id
-SPOTIFY_CLIENT_SECRET=your_secret
-```
-Dan di `application.yml` Lavalink, isi `clientId` & `clientSecret` di section `spotify`.
-
-### Multiple Lavalink Nodes (Load Balancing)
-Edit `src/lavalink.js` dan tambahkan node tambahan di array `nodes`. Berguna untuk scaling ke banyak server seperti Jockie Music.
-
-## 📝 Referensi & Inspirasi
-
-- **Jockie Music** — Bot music Discord dengan 20+ juta server. Mendukung multi-channel playback, 12+ source platform, filters audio, dan auto-resume.
-- **Lavalink** — Audio node server yang handle playback. Dibuat untuk performance tinggi dengan Java.
-- **lavalink-client** — Modern Node.js wrapper untuk Lavalink v4 dengan built-in Spotify support, auto-resume, dan multi-node load balancing.
-
-## 🚀 Tips Scaling (untuk jadi seperti Jockie Music)
-
-1. **Multiple Lavalink nodes** — Distribusi load antar server
-2. **Sharding** — Gunakan Discord.js sharding untuk >2000 servers
-3. **Database** — Simpan player state ke Redis/PostgreSQL untuk auto-resume yang robust
-4. **Web Dashboard** — Buat web dashboard untuk kontrol queue
-5. **Audio Filters** — Tambahkan bassboost, nightcore, vaporwave, dll
-6. **DJ System** — Role-based permission untuk skip/stop
-
-## 📄 License
-
-MIT — Bebas pakai dan modifikasi.
+> **Penting:** Pastikan **Message Content Intent** dan **Server Members Intent** sudah diaktifkan di [Discord Developer Portal](https://discord.com/developers/applications) pada menu **Bot**.
