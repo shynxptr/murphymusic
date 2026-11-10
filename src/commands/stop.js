@@ -1,20 +1,23 @@
-import { SlashCommandBuilder } from "discord.js";
+import { validateVoiceControl, clearPlayerTimeouts } from "../utils/musicUtils.js";
 
 export default {
-  data: new SlashCommandBuilder()
-    .setName("stop")
-    .setDescription("Stop playing and clear the queue"),
+  name: "stop",
+  aliases: ["leave", "dc", "disconnect"],
+  description: "Hentikan musik, hapus antrean, dan keluar dari voice channel",
+  usage: "",
 
-  async execute(interaction, client) {
-    const player = client.lavalink.getPlayer(interaction.guildId);
+  async execute(message, args, client) {
+    const player = client.lavalink.getPlayer(message.guild.id);
     if (!player) {
-      return interaction.reply({ content: "❌ Bot tidak sedang play!", ephemeral: true });
+      return message.reply("❌ Bot sedang tidak memutar musik!");
     }
 
-    player.queue.clear();
-    await player.stop();
+    const voiceErr = validateVoiceControl(message, player);
+    if (voiceErr) return message.reply(voiceErr);
+
+    clearPlayerTimeouts(player);
     await player.destroy();
 
-    await interaction.reply("⏹️ Stopped & cleared queue. Disconnected from voice channel.");
+    await message.reply("⏹️ Musik dihentikan, antrean dibersihkan, dan keluar dari voice channel.");
   },
 };

@@ -1,5 +1,3 @@
-import prettyMs from "pretty-ms";
-
 /**
  * Safely get track info fields (lavalink-client stores them in track.info)
  */
@@ -16,18 +14,19 @@ export function getTrackInfo(track) {
 }
 
 /**
- * Format duration from milliseconds to readable string
+ * Format duration from milliseconds to readable string (M:SS or H:MM:SS)
  */
 export function formatDuration(ms) {
   if (!ms || ms <= 0) return "0:00";
-  if (ms < 3600000) {
-    // Under 1 hour: show M:SS
-    const s = Math.floor(ms / 1000);
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${m}:${sec.toString().padStart(2, "0")}`;
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
   }
-  return prettyMs(ms, { colonNotation: true, secondsDecimalDigits: 0 });
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
 /**
@@ -35,7 +34,7 @@ export function formatDuration(ms) {
  */
 export function createProgressBar(position, duration, size = 15) {
   if (!duration) return "🔴 LIVE";
-  const pct = position / duration;
+  const pct = Math.min(Math.max(position / duration, 0), 1);
   const filled = Math.round(size * pct);
   const empty = size - filled;
   return `${"█".repeat(filled)}${"░".repeat(empty)} ${Math.round(pct * 100)}%`;
@@ -59,28 +58,60 @@ export function getSourceEmoji(sourceName) {
 }
 
 /**
- * Ensure member is in a voice channel
+ * Ensure member is in a voice channel (works for Message or Interaction)
  */
-export function getVoiceChannel(interaction) {
-  const member = interaction.guild.members.cache.get(interaction.user.id);
-  return member?.voice?.channel;
+export function getVoiceChannel(ctx) {
+  const userId = ctx.author?.id || ctx.user?.id;
+  return (
+    ctx.member?.voice?.channel ||
+    ctx.guild?.members?.cache.get(userId)?.voice?.channel ||
+    null
+  );
 }
 
 /**
  * Ensure member is in the same voice channel as bot
  */
-export function isSameVoiceChannel(interaction, player) {
-  const memberVoice = getVoiceChannel(interaction);
-  if (!memberVoice) return false;
-  if (memberVoice.id !== player.voiceChannelId) return false;
-  return true;
+export function isSameVoiceChannel(ctx, player) {
+  const memberVoice = getVoiceChannel(ctx);
+  if (!memberVoice || !player?.voiceChannelId) return false;
+  return memberVoice.id === player.voiceChannelId;
+}
+
+/**
+ * Validate that the user is in the same voice channel as the bot for control commands
+ */
+export function validateVoiceControl(ctx, player) {
+  const memberVoice = getVoiceChannel(ctx);
+  if (!memberVoice) {
+    return "❌ Kamu harus berada di voice channel terlebih dahulu!";
+  }
+  if (player?.voiceChannelId && memberVoice.id !== player.voiceChannelId) {
+    return `❌ Kamu harus berada di voice channel yang sama dengan bot (<#${player.voiceChannelId}>)!`;
+  }
+  return null;
+}
+
+/**
+ * Clear custom timeouts attached to a player
+ */
+export function clearPlayerTimeouts(player) {
+  if (!player) return;
+  if (player.__leaveTimeout) {
+    clearTimeout(player.__leaveTimeout);
+    player.__leaveTimeout = null;
+  }
+  if (player.__queueEndTimeout) {
+    clearTimeout(player.__queueEndTimeout);
+    player.__queueEndTimeout = null;
+  }
 }
 
 /**
  * Create player if it doesn't exist yet
  */
-export async function createPlayer(interaction, client) {
-  const voiceChannel = getVoiceChannel(interaction);
+export async function createPlayer(ctx, client) {
+  const voiceChannel = getVoiceChannel(ctx);
   if (!voiceChannel) {
     return {
       error: "❌ Kamu harus berada di voice channel dulu!",
@@ -94,13 +125,15 @@ export async function createPlayer(interaction, client) {
     };
   }
 
-  let player = client.lavalink.getPlayer(interaction.guildId);
+  const guildId = ctx.guildId || ctx.guild?.id;
+  const channelId = ctx.channelId || ctx.channel?.id;
+  let player = client.lavalink.getPlayer(guildId);
 
   if (!player) {
     player = await client.lavalink.createPlayer({
-      guildId: interaction.guildId,
+      guildId,
       voiceChannelId: voiceChannel.id,
-      textChannelId: interaction.channelId,
+      textChannelId: channelId,
       selfDeaf: true,
       selfMute: false,
     });
@@ -108,8 +141,23 @@ export async function createPlayer(interaction, client) {
     // Connect to voice channel
     await player.connect();
   } else if (player.voiceChannelId !== voiceChannel.id) {
-    // Move to new voice channel
-    await player.setVoiceChannelId(voiceChannel.id);
+    // Only allow moving channel if the old channel has no human listeners or bot is idle
+    const oldChannel = ctx.guild?.channels?.cache.get(player.voiceChannelId);
+    const humansInOld = oldChannel
+      ? oldChannel.members.filter(m => !m.user.bot).size
+      : 0;
+
+    if (humansInOld > 0 && (player.playing || player.paused)) {
+      return {
+        error: `❌ Bot sedang digunakan di <#${player.voiceChannelId}>! Bergabunglah ke sana untuk menambahkan lagu.`,
+      };
+    }
+
+    player.voiceChannelId = voiceChannel.id;
+    player.textChannelId = channelId;
+    await player.connect();
+  } else {
+    player.textChannelId = channelId;
   }
 
   return { player };

@@ -1,10 +1,10 @@
 import "dotenv/config";
 import { Client, GatewayIntentBits, Partials } from "discord.js";
 import { manager, setClient } from "./lavalink.js";
-import { loadCommands, handleInteraction } from "./handlers/commandHandler.js";
+import { loadCommands } from "./handlers/commandHandler.js";
 import { loadEvents } from "./handlers/eventHandler.js";
 
-// Bot client with necessary intents
+// Bot client with necessary intents for prefix commands and voice
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -25,10 +25,7 @@ client.lavalink = manager;
 await loadCommands(client);
 await loadEvents(client);
 
-// Login first, then init lavalink
+// Login to Discord (Lavalink is initialized inside ready.js)
 await client.login(process.env.DISCORD_TOKEN);
-
-// Init lavalink manager with bot user id after login
-client.lavalink.init(client.user.id);
 
 export { client };

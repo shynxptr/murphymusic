@@ -1,16 +1,16 @@
-import { SlashCommandBuilder } from "discord.js";
 import { getSourceEmoji, formatDuration, getTrackInfo } from "../utils/musicUtils.js";
 
 export default {
-  data: new SlashCommandBuilder()
-    .setName("queue")
-    .setDescription("Show the current music queue"),
+  name: "queue",
+  aliases: ["q", "list"],
+  description: "Tampilkan daftar antrean lagu",
+  usage: "[halaman]",
 
-  async execute(interaction, client) {
-    const player = client.lavalink.getPlayer(interaction.guildId);
+  async execute(message, args, client, prefix) {
+    const player = client.lavalink.getPlayer(message.guild.id);
 
     if (!player || (!player.queue.tracks.length && !player.queue.current)) {
-      return interaction.reply({ content: "📭 Queue kosong!", ephemeral: true });
+      return message.reply("📭 Antrean kosong!");
     }
 
     const current = player.queue.current;
@@ -18,42 +18,52 @@ export default {
     const currentInfo = getTrackInfo(current);
     const emoji = getSourceEmoji(currentInfo.sourceName);
 
+    const perPage = 10;
+    const totalPages = Math.max(1, Math.ceil(tracks.length / perPage));
+    const requestedPage = parseInt(args[0], 10) || 1;
+    const page = Math.min(Math.max(requestedPage, 1), totalPages);
+
     let description = "";
 
     // Currently playing
     if (current) {
-      description += `🎵 **Now Playing**\n${emoji} **${currentInfo.title}** by **${currentInfo.author}**\n`;
-      description += `⏱️ ${formatDuration(player.position)} / ${formatDuration(currentInfo.duration)}\n\n`;
+      description += `🎵 **Sedang Diputar**\n${emoji} **${currentInfo.title}** — **${currentInfo.author}**\n`;
+      description += `⏱️ \`${formatDuration(player.position)} / ${formatDuration(currentInfo.duration)}\`\n\n`;
     }
 
-    // Upcoming tracks
+    // Upcoming tracks for requested page
     if (tracks.length > 0) {
-      description += `📜 **Up Next (${tracks.length})**\n`;
-      const maxShow = 15;
-      const slice = tracks.slice(0, maxShow);
+      const start = (page - 1) * perPage;
+      const slice = tracks.slice(start, start + perPage);
 
+      description += `📜 **Antrean Selanjutnya (${tracks.length} lagu)**\n`;
       for (let i = 0; i < slice.length; i++) {
+        const idx = start + i + 1;
         const tInfo = getTrackInfo(slice[i]);
         const tEmoji = getSourceEmoji(tInfo.sourceName);
-        description += `\`${(i + 1).toString().padStart(2, " ")}.\` ${tEmoji} **${tInfo.title}** — ${formatDuration(tInfo.duration)}\n`;
+        description += `\`${idx.toString().padStart(2, " ")}.\` ${tEmoji} **${tInfo.title}** — \`${formatDuration(tInfo.duration)}\`\n`;
       }
 
-      if (tracks.length > maxShow) {
-        description += `\n*...dan ${tracks.length - maxShow} lagu lagi*`;
+      if (totalPages > 1) {
+        description += `\n*Halaman ${page}/${totalPages} — ketik \`${prefix}q ${page < totalPages ? page + 1 : 1}\` untuk halaman lain*`;
       }
     }
 
     // Total queue duration
-    const totalDuration = tracks.reduce((sum, t) => sum + (getTrackInfo(t).duration || 0), 0) + (currentInfo.duration || 0);
+    const totalDuration =
+      tracks.reduce((sum, t) => sum + (getTrackInfo(t).duration || 0), 0) +
+      (currentInfo.duration || 0);
 
     const embed = {
       color: 0x2b2d31,
       title: "🎵 Music Queue",
-      description: description || "Queue kosong",
-      footer: { text: `Total: ${tracks.length + 1} tracks • ${formatDuration(totalDuration)} • Loop: ${player.repeatMode}` },
+      description: description || "Antrean kosong",
+      footer: {
+        text: `Total: ${tracks.length + (current ? 1 : 0)} lagu • Durasi: ${formatDuration(totalDuration)} • Loop: ${player.repeatMode}`,
+      },
       timestamp: new Date().toISOString(),
     };
 
-    await interaction.reply({ embeds: [embed] });
+    await message.reply({ embeds: [embed] });
   },
 };

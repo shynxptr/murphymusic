@@ -1,68 +1,115 @@
-import { SlashCommandBuilder, StringSelectMenuBuilder, ActionRowBuilder } from "discord.js";
-import { createPlayer, getSourceEmoji, formatDuration, getTrackInfo } from "../utils/musicUtils.js";
+import { createPlayer, getSourceEmoji, formatDuration, getTrackInfo, validateVoiceControl } from "../utils/musicUtils.js";
 
 export default {
-  data: new SlashCommandBuilder()
-    .setName("search")
-    .setDescription("Search for a song on YouTube and pick from results")
-    .addStringOption(option =>
-      option
-        .setName("query")
-        .setDescription("Song name to search")
-        .setRequired(true)
-    ),
+  name: "search",
+  aliases: ["find", "sc"],
+  description: "Cari lagu di YouTube dan pilih lewat ketik nomor (1-10)",
+  usage: "<judul lagu>",
 
-  async execute(interaction, client) {
-    const query = interaction.options.getString("query");
-    await interaction.deferReply();
+  async execute(message, args, client, prefix) {
+    if (!args.length) {
+      return message.reply(`❌ Masukkan judul lagu yang ingin dicari! Contoh: \`${prefix}search <judul lagu>\``);
+    }
+
+    const { player, error } = await createPlayer(message, client);
+    if (error) return message.reply(error);
+
+    const query = args.join(" ");
+    const searchMsg = await message.reply(`🔎 Mencari **${query}**...`);
 
     try {
-      const tempPlayer = await createPlayer(interaction, client);
-      if (tempPlayer.error) {
-        return interaction.editReply(tempPlayer.error);
-      }
-      const player = tempPlayer.player;
-
-      const result = await player.search({
-        query,
-        source: "ytsearch",
-      }, interaction.user);
+      const result = await player.search(
+        {
+          query,
+          source: "ytsearch",
+        },
+        message.author
+      );
 
       if (!result || !result.tracks || result.tracks.length === 0) {
-        return interaction.editReply("❌ Tidak ada hasil ditemukan!");
+        return searchMsg.edit("❌ Tidak ada hasil ditemukan!");
       }
 
       const tracks = result.tracks.slice(0, 10);
-      const options = tracks.map((track, i) => {
-        const info = getTrackInfo(track);
-        return {
-          label: `${i + 1}. ${info.title}`.slice(0, 100),
-          description: `${info.author} • ${formatDuration(info.duration)}`.slice(0, 100),
-          value: track.encoded,
-          emoji: getSourceEmoji(info.sourceName),
-        };
+      const listText = tracks
+        .map((track, i) => {
+          const info = getTrackInfo(track);
+          const emoji = getSourceEmoji(info.sourceName);
+          return `\`${(i + 1).toString().padStart(2, " ")}.\` ${emoji} **${info.title}** — ${info.author} (\`${formatDuration(info.duration)}\`)`;
+        })
+        .join("\n");
+
+      const embed = {
+        color: 0x2b2d31,
+        title: `🔎 Hasil Pencarian: "${query}"`,
+        description: listText,
+        footer: {
+          text: "Ketik angka 1 - " + tracks.length + " di chat untuk memilih lagu, atau ketik 'batal' (30 detik)",
+        },
+      };
+
+      await searchMsg.edit({ content: null, embeds: [embed] });
+
+      const filter = (m) => m.author.id === message.author.id;
+      const collector = message.channel.createMessageCollector({
+        filter,
+        time: 30_000,
+        max: 1,
       });
 
-      const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId("search-select")
-        .setPlaceholder("Pilih lagu yang mau diputar...")
-        .addOptions(options);
+      collector.on("collect", async (replyMsg) => {
+        const content = replyMsg.content.trim().toLowerCase();
+        if (content === "batal" || content === "cancel" || content === "c") {
+          await searchMsg.edit({ content: "❌ Pencarian dibatalkan.", embeds: [] }).catch(() => {});
+          return;
+        }
 
-      const row = new ActionRowBuilder().addComponents(selectMenu);
+        const index = parseInt(content, 10);
+        if (isNaN(index) || index < 1 || index > tracks.length) {
+          await searchMsg.edit({ content: "❌ Pilihan tidak valid. Pencarian dibatalkan.", embeds: [] }).catch(() => {});
+          return;
+        }
 
-      await interaction.editReply({
-        content: `🔎 Hasil pencarian untuk: **${query}**`,
-        components: [row],
+        const currentPlayer = client.lavalink.getPlayer(message.guild.id);
+        if (!currentPlayer) {
+          await searchMsg.edit({ content: `❌ Player sudah tidak aktif! Gunakan \`${prefix}p\` lagi.`, embeds: [] }).catch(() => {});
+          return;
+        }
+
+        const voiceErr = validateVoiceControl(message, currentPlayer);
+        if (voiceErr) {
+          await searchMsg.edit({ content: voiceErr, embeds: [] }).catch(() => {});
+          return;
+        }
+
+        const selectedTrack = tracks[index - 1];
+        const wasPlaying = currentPlayer.playing || currentPlayer.paused;
+        currentPlayer.queue.add(selectedTrack);
+
+        if (!currentPlayer.playing && !currentPlayer.paused) {
+          await currentPlayer.play();
+        }
+
+        const info = getTrackInfo(selectedTrack);
+        const emoji = getSourceEmoji(info.sourceName);
+        const positionText = wasPlaying ? ` (Antrean #${currentPlayer.queue.tracks.length})` : "";
+
+        await searchMsg
+          .edit({
+            content: `${wasPlaying ? "➕ **Ditambahkan ke antrean:**" : "🎵 **Memutar sekarang:**"}\n${emoji} **${info.title}** oleh **${info.author}** (\`${formatDuration(info.duration)}\`)${positionText}`,
+            embeds: [],
+          })
+          .catch(() => {});
       });
 
-      client.searchResults = client.searchResults || new Map();
-      client.searchResults.set(interaction.user.id + interaction.guildId, {
-        tracks,
-        guildId: player.guildId,
+      collector.on("end", (collected) => {
+        if (collected.size === 0) {
+          searchMsg.edit({ content: "⌛ Waktu memilih lagu habis (30 detik).", embeds: [] }).catch(() => {});
+        }
       });
-    } catch (error) {
-      console.error("Search command error:", error);
-      await interaction.editReply("❌ Error: " + error.message);
+    } catch (err) {
+      console.error("Search command error:", err);
+      await searchMsg.edit("❌ Error: " + err.message);
     }
   },
 };

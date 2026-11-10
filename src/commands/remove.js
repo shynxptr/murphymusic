@@ -1,37 +1,35 @@
-import { SlashCommandBuilder } from "discord.js";
-import { getTrackInfo } from "../utils/musicUtils.js";
+import { getTrackInfo, validateVoiceControl } from "../utils/musicUtils.js";
 
 export default {
-  data: new SlashCommandBuilder()
-    .setName("remove")
-    .setDescription("Remove a song from the queue by position")
-    .addIntegerOption(option =>
-      option
-        .setName("position")
-        .setDescription("Position number in queue (1-based)")
-        .setRequired(true)
-        .setMinValue(1)
-    ),
+  name: "remove",
+  aliases: ["rm", "delete"],
+  description: "Hapus lagu dari antrean berdasarkan nomor urut",
+  usage: "<nomor>",
 
-  async execute(interaction, client) {
-    const player = client.lavalink.getPlayer(interaction.guildId);
+  async execute(message, args, client, prefix) {
+    const player = client.lavalink.getPlayer(message.guild.id);
     if (!player || player.queue.tracks.length === 0) {
-      return interaction.reply({ content: "❌ Queue kosong!", ephemeral: true });
+      return message.reply("❌ Antrean sedang kosong!");
     }
 
-    const position = interaction.options.getInteger("position");
+    const voiceErr = validateVoiceControl(message, player);
+    if (voiceErr) return message.reply(voiceErr);
+
+    const position = parseInt(args[0], 10);
+    if (isNaN(position) || position < 1) {
+      return message.reply(`❌ Masukkan nomor urut lagu yang valid! Contoh: \`${prefix}rm 1\``);
+    }
 
     if (position > player.queue.tracks.length) {
-      return interaction.reply({
-        content: `❌ Tidak ada lagu di posisi ${position}! Queue hanya punya ${player.queue.tracks.length} lagu.`,
-        ephemeral: true,
-      });
+      return message.reply(
+        `❌ Tidak ada lagu di posisi #${position}! Antrean hanya punya **${player.queue.tracks.length}** lagu.`
+      );
     }
 
     const removed = player.queue.tracks[position - 1];
     const removedInfo = getTrackInfo(removed);
-    player.queue.removeTracks(position - 1);
+    await player.queue.remove(position - 1);
 
-    await interaction.reply(`🗑️ Removed **${removedInfo.title}** dari posisi #${position}`);
+    await message.reply(`🗑️ Menghapus **${removedInfo.title}** dari posisi #${position}`);
   },
 };

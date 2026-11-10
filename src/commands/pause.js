@@ -1,17 +1,22 @@
-import { SlashCommandBuilder } from "discord.js";
+import { getTrackInfo, validateVoiceControl } from "../utils/musicUtils.js";
 
 export default {
-  data: new SlashCommandBuilder()
-    .setName("pause")
-    .setDescription("Pause the current song"),
+  name: "pause",
+  aliases: ["pa"],
+  description: "Jeda lagu yang sedang diputar",
+  usage: "",
 
-  async execute(interaction, client) {
-    const player = client.lavalink.getPlayer(interaction.guildId);
+  async execute(message, args, client, prefix) {
+    const player = client.lavalink.getPlayer(message.guild.id);
     if (!player || !player.playing) {
-      return interaction.reply({ content: "❌ Tidak ada lagu yang sedang diputar!", ephemeral: true });
+      return message.reply("❌ Tidak ada lagu yang sedang diputar!");
     }
 
-    await player.setPaused(true);
-    await interaction.reply(`⏸️ Paused **${player.queue.current?.title}**\nGunakan /resume untuk lanjut`);
+    const voiceErr = validateVoiceControl(message, player);
+    if (voiceErr) return message.reply(voiceErr);
+
+    const info = getTrackInfo(player.queue.current);
+    await player.pause();
+    await message.reply(`⏸️ Paused **${info.title}**\nKetik \`${prefix}r\` atau \`${prefix}resume\` untuk melanjutkan.`);
   },
 };

@@ -1,27 +1,30 @@
-import { SlashCommandBuilder } from "discord.js";
+import { validateVoiceControl } from "../utils/musicUtils.js";
 
 export default {
-  data: new SlashCommandBuilder()
-    .setName("volume")
-    .setDescription("Set the music volume (0-150)")
-    .addIntegerOption(option =>
-      option
-        .setName("level")
-        .setDescription("Volume level 0-150")
-        .setRequired(true)
-        .setMinValue(0)
-        .setMaxValue(150)
-    ),
+  name: "volume",
+  aliases: ["vol", "v"],
+  description: "Cek atau ubah volume musik (0-150)",
+  usage: "[0-150]",
 
-  async execute(interaction, client) {
-    const player = client.lavalink.getPlayer(interaction.guildId);
+  async execute(message, args, client, prefix) {
+    const player = client.lavalink.getPlayer(message.guild.id);
     if (!player) {
-      return interaction.reply({ content: "❌ Bot tidak sedang play!", ephemeral: true });
+      return message.reply("❌ Bot sedang tidak memutar musik!");
     }
 
-    const level = interaction.options.getInteger("level");
-    await player.setVolume(level);
+    if (!args.length) {
+      return message.reply(`🔊 Volume saat ini: **${player.volume}%**\nKetik \`${prefix}v <0-150>\` untuk mengubah volume.`);
+    }
 
-    await interaction.reply(`🔊 Volume diset ke **${level}%**`);
+    const voiceErr = validateVoiceControl(message, player);
+    if (voiceErr) return message.reply(voiceErr);
+
+    const level = parseInt(args[0], 10);
+    if (isNaN(level) || level < 0 || level > 150) {
+      return message.reply("❌ Masukkan angka volume antara **0** sampai **150**!");
+    }
+
+    await player.setVolume(level);
+    await message.reply(`🔊 Volume diset ke **${level}%**`);
   },
 };

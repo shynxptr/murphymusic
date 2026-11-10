@@ -1,76 +1,74 @@
-import { SlashCommandBuilder } from "discord.js";
 import { createPlayer, getSourceEmoji, formatDuration, getTrackInfo } from "../utils/musicUtils.js";
 
 export default {
-  data: new SlashCommandBuilder()
-    .setName("play")
-    .setDescription("Play a song from YouTube, Spotify, SoundCloud, or any URL")
-    .addStringOption(option =>
-      option
-        .setName("query")
-        .setDescription("Song name, URL, or playlist link")
-        .setRequired(true)
-    ),
+  name: "play",
+  aliases: ["p"],
+  description: "Putar lagu dari YouTube, Spotify, SoundCloud, atau URL",
+  usage: "<judul lagu / URL>",
 
-  async execute(interaction, client) {
-    const { player, error } = await createPlayer(interaction, client);
-    if (error) return interaction.reply({ content: error, ephemeral: true });
+  async execute(message, args, client, prefix) {
+    if (!args.length) {
+      return message.reply(`❌ Masukkan judul lagu atau link! Contoh: \`${prefix}p <judul lagu>\``);
+    }
 
-    const query = interaction.options.getString("query");
-    await interaction.deferReply();
+    const { player, error } = await createPlayer(message, client);
+    if (error) return message.reply(error);
+
+    const query = args.join(" ");
+    const loadingMsg = await message.reply(`🔎 Mencari **${query}**...`);
 
     try {
-      const result = await player.search({
-        query,
-        source: "ytsearch",
-      }, interaction.user);
+      const result = await player.search(
+        {
+          query,
+          source: "ytsearch",
+        },
+        message.author
+      );
 
       if (!result || !result.tracks || result.tracks.length === 0) {
-        return interaction.editReply("❌ Tidak ada lagu yang ditemukan!");
+        return loadingMsg.edit("❌ Tidak ada lagu yang ditemukan!");
       }
 
-      const addedTracks = [];
       const isPlaylist = result.loadType === "playlist";
+      const wasPlaying = player.playing || player.paused;
 
       if (isPlaylist) {
-        for (const track of result.tracks) {
-          player.queue.add(track);
-          addedTracks.push(track);
-        }
+        player.queue.add(result.tracks);
       } else {
-        const track = result.tracks[0];
-        player.queue.add(track);
-        addedTracks.push(track);
+        player.queue.add(result.tracks[0]);
       }
 
-      const track = addedTracks[0];
-      const info = getTrackInfo(track);
+      const firstTrack = result.tracks[0];
+      const info = getTrackInfo(firstTrack);
       const emoji = getSourceEmoji(info.sourceName);
 
+      // Start playback from queue without passing duplicate track object
       if (!player.playing && !player.paused) {
-        await player.play({ track: { encoded: track.encoded } });
+        await player.play();
       }
 
       if (isPlaylist) {
-        await interaction.editReply(
-          `🎶 **Playlist added!** ${addedTracks.length} tracks in queue\n` +
-          `Now playing: ${emoji} **${info.title}** by **${info.author}**\n` +
-          `Duration: ${formatDuration(info.duration)}`
+        const playlistTitle = result.playlist?.title || result.playlist?.name || "Playlist";
+        await loadingMsg.edit(
+          `🎶 **Playlist ditambahkan:** **${playlistTitle}** (${result.tracks.length} lagu)\n` +
+          `${wasPlaying ? "Ditambahkan ke antrean" : "Mulai memutar"}: ${emoji} **${info.title}** — **${info.author}** (\`${formatDuration(info.duration)}\`)`
+        );
+      } else if (wasPlaying) {
+        const position = player.queue.tracks.length;
+        await loadingMsg.edit(
+          `➕ **Ditambahkan ke antrean (#${position}):**\n` +
+          `${emoji} **${info.title}** oleh **${info.author}** (\`${formatDuration(info.duration)}\`)`
         );
       } else {
-        const position = player.queue.size;
-        const positionText = position > 0
-          ? `\n📊 Position in queue: #${position}`
-          : "";
-
-        await interaction.editReply(
-          `${emoji} **${info.title}** by **${info.author}**\n` +
-          `Duration: ${formatDuration(info.duration)}${positionText}`
+        await loadingMsg.edit(
+          `🎵 **Memutar sekarang:**\n` +
+          `${emoji} **${info.title}** oleh **${info.author}** (\`${formatDuration(info.duration)}\`)`
         );
       }
-    } catch (error) {
-      console.error("Play command error:", error);
-      await interaction.editReply("❌ Error saat memutar lagu: " + error.message);
+    } catch (err) {
+      console.error("Play command error:", err);
+      await loadingMsg.edit("❌ Error saat memutar lagu: " + err.message);
     }
   },
 };

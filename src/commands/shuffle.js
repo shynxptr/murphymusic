@@ -1,17 +1,21 @@
-import { SlashCommandBuilder } from "discord.js";
+import { validateVoiceControl } from "../utils/musicUtils.js";
 
 export default {
-  data: new SlashCommandBuilder()
-    .setName("shuffle")
-    .setDescription("Shuffle the current queue"),
+  name: "shuffle",
+  aliases: ["sh", "mix"],
+  description: "Acak urutan lagu di dalam antrean",
+  usage: "",
 
-  async execute(interaction, client) {
-    const player = client.lavalink.getPlayer(interaction.guildId);
+  async execute(message, args, client) {
+    const player = client.lavalink.getPlayer(message.guild.id);
     if (!player || player.queue.tracks.length < 2) {
-      return interaction.reply({ content: "❌ Tidak cukup lagu di queue untuk di-shuffle!", ephemeral: true });
+      return message.reply("❌ Minimal harus ada 2 lagu di antrean untuk di-shuffle!");
     }
 
+    const voiceErr = validateVoiceControl(message, player);
+    if (voiceErr) return message.reply(voiceErr);
+
     await player.queue.shuffle();
-    await interaction.reply(`🔀 Queue di-shuffle! ${player.queue.tracks.length} tracks`);
+    await message.reply(`🔀 Antrean berhasil di-shuffle! (**${player.queue.tracks.length}** lagu)`);
   },
 };

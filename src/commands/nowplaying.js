@@ -1,15 +1,15 @@
-import { SlashCommandBuilder } from "discord.js";
 import { getSourceEmoji, formatDuration, createProgressBar, getTrackInfo } from "../utils/musicUtils.js";
 
 export default {
-  data: new SlashCommandBuilder()
-    .setName("nowplaying")
-    .setDescription("Show the currently playing song"),
+  name: "nowplaying",
+  aliases: ["np", "current"],
+  description: "Tampilkan detail lagu yang sedang diputar",
+  usage: "",
 
-  async execute(interaction, client) {
-    const player = client.lavalink.getPlayer(interaction.guildId);
+  async execute(message, args, client) {
+    const player = client.lavalink.getPlayer(message.guild.id);
     if (!player || !player.queue.current) {
-      return interaction.reply({ content: "❌ Tidak ada lagu yang sedang diputar!", ephemeral: true });
+      return message.reply("❌ Tidak ada lagu yang sedang diputar!");
     }
 
     const track = player.queue.current;
@@ -17,26 +17,31 @@ export default {
     const emoji = getSourceEmoji(info.sourceName);
     const progress = createProgressBar(player.position, info.duration);
 
-    const loopText = player.repeatMode === "track" ? " 🔂" : player.repeatMode === "queue" ? " 🔁" : "";
+    const loopText =
+      player.repeatMode === "track"
+        ? "\n🔂 Loop: Track"
+        : player.repeatMode === "queue"
+          ? "\n🔁 Loop: Queue"
+          : "";
 
     const embed = {
       color: 0x2b2d31,
       title: "🎵 Now Playing",
       description:
         `${emoji} **${info.title}**\n` +
-        `👤 ${info.author}\n` +
-        `${loopText}\n` +
-        `\n${progress}\n` +
+        `👤 ${info.author}${loopText}\n\n` +
+        `${progress}\n` +
         `\`${formatDuration(player.position)}\` / \`${formatDuration(info.duration)}\``,
-      thumbnail: { url: info.artworkUrl || null },
+      thumbnail: info.artworkUrl ? { url: info.artworkUrl } : undefined,
       footer: {
-        text: `Requested by ${track.requester?.tag || "Unknown"}` +
+        text:
+          `Requested by ${track.requester?.tag || track.requester?.username || "Unknown"}` +
           ` • Volume: ${player.volume}%` +
-          ` • Queue: ${player.queue.tracks.length} tracks`,
+          ` • Antrean: ${player.queue.tracks.length} lagu`,
       },
       timestamp: new Date().toISOString(),
     };
 
-    await interaction.reply({ embeds: [embed] });
+    await message.reply({ embeds: [embed] });
   },
 };

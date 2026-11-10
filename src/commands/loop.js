@@ -1,42 +1,50 @@
-import { SlashCommandBuilder } from "discord.js";
+import { getTrackInfo, validateVoiceControl } from "../utils/musicUtils.js";
 
 export default {
-  data: new SlashCommandBuilder()
-    .setName("loop")
-    .setDescription("Set loop mode for the queue")
-    .addStringOption(option =>
-      option
-        .setName("mode")
-        .setDescription("Loop mode")
-        .setRequired(true)
-        .addChoices(
-          { name: "Off", value: "off" },
-          { name: "Track - loop current song", value: "track" },
-          { name: "Queue - loop entire queue", value: "queue" },
-        )
-    ),
+  name: "loop",
+  aliases: ["repeat", "l"],
+  description: "Atur mode loop (off / track / queue)",
+  usage: "[off|track|queue]",
 
-  async execute(interaction, client) {
-    const player = client.lavalink.getPlayer(interaction.guildId);
+  async execute(message, args, client) {
+    const player = client.lavalink.getPlayer(message.guild.id);
     if (!player) {
-      return interaction.reply({ content: "❌ Bot tidak sedang play!", ephemeral: true });
+      return message.reply("❌ Bot sedang tidak memutar musik!");
     }
 
-    const mode = interaction.options.getString("mode");
+    const voiceErr = validateVoiceControl(message, player);
+    if (voiceErr) return message.reply(voiceErr);
 
-    switch (mode) {
-      case "off":
-        await player.setRepeatMode("off");
-        await interaction.reply("🔁 Loop **dimatikan**");
-        break;
-      case "track":
-        await player.setRepeatMode("track");
-        await interaction.reply(`🔂 Loop **track** diaktifkan: **${player.queue.current?.title}**`);
-        break;
-      case "queue":
-        await player.setRepeatMode("queue");
-        await interaction.reply("🔁 Loop **queue** diaktifkan! Semua lagu akan diulang.");
-        break;
+    const input = args[0]?.toLowerCase();
+    let mode;
+
+    if (!input) {
+      // Cycle mode if no argument given: off -> track -> queue -> off
+      mode =
+        player.repeatMode === "off"
+          ? "track"
+          : player.repeatMode === "track"
+            ? "queue"
+            : "off";
+    } else if (["off", "none", "0", "mati"].includes(input)) {
+      mode = "off";
+    } else if (["track", "song", "t", "1", "lagu"].includes(input)) {
+      mode = "track";
+    } else if (["queue", "all", "q", "2", "semua"].includes(input)) {
+      mode = "queue";
+    } else {
+      return message.reply("❌ Mode tidak valid! Gunakan: `off`, `track`, atau `queue`.");
+    }
+
+    await player.setRepeatMode(mode);
+
+    if (mode === "off") {
+      await message.reply("🔁 Loop **dimatikan**.");
+    } else if (mode === "track") {
+      const info = getTrackInfo(player.queue.current);
+      await message.reply(`🔂 Loop **track** diaktifkan untuk: **${info.title}**`);
+    } else {
+      await message.reply("🔁 Loop **queue** diaktifkan! Semua lagu di antrean akan diulang.");
     }
   },
 };

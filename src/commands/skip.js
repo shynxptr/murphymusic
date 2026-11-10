@@ -1,26 +1,31 @@
-import { SlashCommandBuilder } from "discord.js";
-import { getTrackInfo } from "../utils/musicUtils.js";
+import { getTrackInfo, validateVoiceControl } from "../utils/musicUtils.js";
 
 export default {
-  data: new SlashCommandBuilder()
-    .setName("skip")
-    .setDescription("Skip the current song"),
+  name: "skip",
+  aliases: ["s", "next"],
+  description: "Lewati lagu yang sedang diputar",
+  usage: "",
 
-  async execute(interaction, client) {
-    const player = client.lavalink.getPlayer(interaction.guildId);
+  async execute(message, args, client) {
+    const player = client.lavalink.getPlayer(message.guild.id);
     if (!player || !player.queue.current) {
-      return interaction.reply({ content: "❌ Tidak ada lagu yang sedang diputar!", ephemeral: true });
+      return message.reply("❌ Tidak ada lagu yang sedang diputar!");
     }
 
-    const skippedInfo = getTrackInfo(player.queue.current);
-    await player.skip();
+    const voiceErr = validateVoiceControl(message, player);
+    if (voiceErr) return message.reply(voiceErr);
 
-    const next = player.queue.current;
-    if (next) {
-      const nextInfo = getTrackInfo(next);
-      await interaction.reply(`⏭️ Skipped **${skippedInfo.title}**\n🎵 Now playing: **${nextInfo.title}**`);
+    const skippedInfo = getTrackInfo(player.queue.current);
+    const hasNext = player.queue.tracks.length > 0 || player.repeatMode !== "off";
+
+    if (hasNext) {
+      const nextTrack = player.queue.tracks[0] || player.queue.current;
+      const nextInfo = getTrackInfo(nextTrack);
+      await player.skip();
+      await message.reply(`⏭️ Skipped **${skippedInfo.title}**\n🎵 Memutar selanjutnya: **${nextInfo.title}**`);
     } else {
-      await interaction.reply(`⏭️ Skipped **${skippedInfo.title}**\n📭 Queue sudah habis`);
+      await player.stopPlaying(true, false);
+      await message.reply(`⏭️ Skipped **${skippedInfo.title}**\n📭 Antrean sudah habis.`);
     }
   },
 };
