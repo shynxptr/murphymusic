@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { LavalinkManager } from "lavalink-client";
-import { clearPlayerTimeouts, getTrackInfo } from "./utils/musicUtils.js";
+import { clearPlayerTimeouts, getTrackInfo, hasPlayableTracks } from "./utils/musicUtils.js";
 import { getPrefix } from "./utils/prefixManager.js";
 
 // Need access to client for shard sending - imported dynamically to avoid circular dependency
@@ -86,9 +86,35 @@ manager.on("trackStart", (player) => {
   clearPlayerTimeouts(player);
 });
 
-manager.on("trackError", (player, track, payload) => {
+manager.on("trackError", async (player, track, payload) => {
   const info = getTrackInfo(track);
   console.error(`Track error in guild ${player.guildId} for "${info.title}":`, payload?.exception || payload);
+
+  // If a YouTube track failed to stream (e.g. AllClientsFailedException), auto-fallback to SoundCloud
+  if (info.sourceName?.toLowerCase().includes("youtube") && !track?.__scFallbackTried) {
+    try {
+      const searchQuery = `${info.author !== "Unknown" ? info.author + " " : ""}${info.title}`.trim();
+      const res = player.node?.rest?.resolve
+        ? await player.node.rest.resolve(`scsearch:${searchQuery}`)
+        : await player.node.request(`/loadtracks?identifier=${encodeURIComponent(`scsearch:${searchQuery}`)}`);
+
+      if (hasPlayableTracks(res)) {
+        const rawFallback = Array.isArray(res.data) ? res.data[0] : res.data;
+        const fallbackTrack = player.LavalinkManager?.utils?.buildTrack
+          ? player.LavalinkManager.utils.buildTrack(rawFallback, track?.requester)
+          : { ...rawFallback, requester: track?.requester };
+
+        fallbackTrack.__scFallbackTried = true;
+        console.log(`[Fallback] Playing SoundCloud mirror for "${info.title}"`);
+        await player.queue.add(fallbackTrack, 0);
+        await player.play();
+        return;
+      }
+    } catch (fallbackErr) {
+      console.error("[Fallback] SoundCloud fallback failed:", fallbackErr.message);
+    }
+  }
+
   const channel = client?.channels.cache.get(player.textChannelId);
   if (channel) {
     channel.send(`⚠️ Gagal memutar **${info.title}** — melewati ke lagu berikutnya.`).catch(() => {});
