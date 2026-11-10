@@ -58,6 +58,48 @@ export function getSourceEmoji(sourceName) {
 }
 
 /**
+ * Extract clean song title & artist from YouTube / Spotify URLs via public oEmbed
+ * Used as an automatic fallback when Lavalink cannot load a direct YouTube/Spotify URL
+ */
+export async function resolveUrlFallbackQuery(url) {
+  try {
+    let oembedUrl = null;
+    if (/^(https?:\/\/)?(www\.|m\.|music\.)?(youtube\.com|youtu\.be)\//i.test(url)) {
+      oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
+    } else if (/^(https?:\/\/)?(open\.)?spotify\.com\/(track|album|playlist)\//i.test(url)) {
+      oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
+    }
+
+    if (!oembedUrl) return null;
+
+    const res = await fetch(oembedUrl, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    if (!data?.title) return null;
+
+    // Clean common YouTube suffixes like "(Official Music Video)", "[Official Audio]", "(Lyrics)", etc.
+    const cleanTitle = data.title
+      .replace(/\(official\s*(music\s*)?(video|audio|lyric\s*video|visualizer|mv)\)/gi, "")
+      .replace(/\[official\s*(music\s*)?(video|audio|lyric\s*video|visualizer|mv)\]/gi, "")
+      .replace(/\((lyrics?|audio|hd|4k|mv)\)/gi, "")
+      .replace(/\[(lyrics?|audio|hd|4k|mv)\]/gi, "")
+      .trim();
+
+    const author = data.author_name
+      ? data.author_name.replace(/\s*-\s*Topic$/i, "").trim()
+      : "";
+
+    if (author && !cleanTitle.toLowerCase().includes(author.toLowerCase())) {
+      return `${author} - ${cleanTitle}`;
+    }
+    return cleanTitle;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Ensure member is in a voice channel (works for Message or Interaction)
  */
 export function getVoiceChannel(ctx) {

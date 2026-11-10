@@ -1,4 +1,10 @@
-import { createPlayer, getSourceEmoji, formatDuration, getTrackInfo } from "../utils/musicUtils.js";
+import {
+  createPlayer,
+  getSourceEmoji,
+  formatDuration,
+  getTrackInfo,
+  resolveUrlFallbackQuery,
+} from "../utils/musicUtils.js";
 
 export default {
   name: "play",
@@ -19,13 +25,30 @@ export default {
     const loadingMsg = await message.reply(`🔎 Mencari **${query}**...`);
 
     try {
-      // If it's a direct URL, don't force ytsearch; otherwise search YouTube first
+      // 1. Try direct URL or YouTube search first
       let result = await player.search(
         isUrl ? { query } : { query, source: "ytsearch" },
         message.author
       );
 
-      // Fallback to SoundCloud search if YouTube search isn't enabled/available on the Lavalink node
+      // 2. If a direct YouTube/Spotify URL failed to load on Lavalink, resolve its title via oEmbed and search
+      if ((!result || !result.tracks || result.tracks.length === 0) && isUrl) {
+        const fallbackQuery = await resolveUrlFallbackQuery(query);
+        if (fallbackQuery) {
+          result = await player.search(
+            { query: fallbackQuery, source: "ytsearch" },
+            message.author
+          );
+          if (!result || !result.tracks || result.tracks.length === 0) {
+            result = await player.search(
+              { query: fallbackQuery, source: "scsearch" },
+              message.author
+            );
+          }
+        }
+      }
+
+      // 3. Fallback to SoundCloud search for text queries if YouTube search returned empty
       if ((!result || !result.tracks || result.tracks.length === 0) && !isUrl) {
         result = await player.search(
           { query, source: "scsearch" },
@@ -36,11 +59,6 @@ export default {
       if (!result || !result.tracks || result.tracks.length === 0) {
         if (result?.loadType === "error" && result?.exception?.message) {
           return loadingMsg.edit(`❌ Gagal memuat lagu dari Lavalink: \`${result.exception.message}\``);
-        }
-        if (isUrl && /youtu\.?be/i.test(query)) {
-          return loadingMsg.edit(
-            "❌ Lagu tidak ditemukan! (Pastikan plugin `youtube-plugin` sudah terpasang di `application.yml` Lavalink v4 karena Lavalink v4 tidak lagi membawa YouTube bawaan)."
-          );
         }
         return loadingMsg.edit("❌ Tidak ada lagu yang ditemukan!");
       }
