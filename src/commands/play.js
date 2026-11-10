@@ -14,19 +14,34 @@ export default {
     const { player, error } = await createPlayer(message, client);
     if (error) return message.reply(error);
 
-    const query = args.join(" ");
+    const query = args.join(" ").trim();
+    const isUrl = /^https?:\/\//i.test(query);
     const loadingMsg = await message.reply(`🔎 Mencari **${query}**...`);
 
     try {
-      const result = await player.search(
-        {
-          query,
-          source: "ytsearch",
-        },
+      // If it's a direct URL, don't force ytsearch; otherwise search YouTube first
+      let result = await player.search(
+        isUrl ? { query } : { query, source: "ytsearch" },
         message.author
       );
 
+      // Fallback to SoundCloud search if YouTube search isn't enabled/available on the Lavalink node
+      if ((!result || !result.tracks || result.tracks.length === 0) && !isUrl) {
+        result = await player.search(
+          { query, source: "scsearch" },
+          message.author
+        );
+      }
+
       if (!result || !result.tracks || result.tracks.length === 0) {
+        if (result?.loadType === "error" && result?.exception?.message) {
+          return loadingMsg.edit(`❌ Gagal memuat lagu dari Lavalink: \`${result.exception.message}\``);
+        }
+        if (isUrl && /youtu\.?be/i.test(query)) {
+          return loadingMsg.edit(
+            "❌ Lagu tidak ditemukan! (Pastikan plugin `youtube-plugin` sudah terpasang di `application.yml` Lavalink v4 karena Lavalink v4 tidak lagi membawa YouTube bawaan)."
+          );
+        }
         return loadingMsg.edit("❌ Tidak ada lagu yang ditemukan!");
       }
 

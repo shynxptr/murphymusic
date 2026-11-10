@@ -3,7 +3,7 @@ import { createPlayer, getSourceEmoji, formatDuration, getTrackInfo, validateVoi
 export default {
   name: "search",
   aliases: ["find", "sc"],
-  description: "Cari lagu di YouTube dan pilih lewat ketik nomor (1-10)",
+  description: "Cari lagu dan pilih lewat ketik nomor (1-10)",
   usage: "<judul lagu>",
 
   async execute(message, args, client, prefix) {
@@ -14,17 +14,28 @@ export default {
     const { player, error } = await createPlayer(message, client);
     if (error) return message.reply(error);
 
-    const query = args.join(" ");
+    const query = args.join(" ").trim();
     const searchMsg = await message.reply(`🔎 Mencari **${query}**...`);
 
     try {
-      const result = await player.search(
+      let result = await player.search(
         {
           query,
           source: "ytsearch",
         },
         message.author
       );
+
+      // Fallback to SoundCloud if YouTube search returns empty
+      if (!result || !result.tracks || result.tracks.length === 0) {
+        result = await player.search(
+          {
+            query,
+            source: "scsearch",
+          },
+          message.author
+        );
+      }
 
       if (!result || !result.tracks || result.tracks.length === 0) {
         return searchMsg.edit("❌ Tidak ada hasil ditemukan!");
